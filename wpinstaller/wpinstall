@@ -63,10 +63,9 @@ class Install(object):
                 default='./requirements.wpm')
 
         self.args = parser.parse_args()
-        self.build()
+        self.install()
         self.create_uploads_directory()
         self.create_symlinks()
-        self.compile_less()
         self.set_permissions()
 
         try:
@@ -87,9 +86,7 @@ class Install(object):
     """
     Executes various commands and handles the install
     """
-    def build(self, *args, **kwargs):
-
-        #assert False, self.args.requirements
+    def install(self, *args, **kwargs):
 
         commands = [
             'wpm installframework %s' % self.public_dir,
