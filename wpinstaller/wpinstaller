@@ -39,16 +39,12 @@ class Install(object):
             help="The deployment domain name", default=None)
         parser.add_argument("--virtualenvs",
             help="Virtualenvs path", default=False)
-        parser.add_argument("--nodeenvs",
-            help="Nodeenvs path", default=False)
         parser.add_argument("--publicpath",
             help="path to public", default='../public')
         parser.add_argument("--user",
             help="WordPress login user name", default='admin')
         parser.add_argument("--password",
             help="WordPress login password", default=None)
-        parser.add_argument("--compileless",
-            help="Compile less files to css", action="store_true")
         parser.add_argument("--flushpermalinks",
             help="Flush permalinks", action="store_true")
         parser.add_argument("--flushw3tc",
@@ -62,6 +58,9 @@ class Install(object):
         parser.add_argument("--symlinkbase",
             help="The base dir for project symlinks",
                 default=None)
+        parser.add_argument("-r", "--requirements",
+            help="The path to requirements.wpm",
+                default='./requirements.wpm')
 
         self.args = parser.parse_args()
         self.build()
@@ -90,12 +89,14 @@ class Install(object):
     """
     def build(self, *args, **kwargs):
 
+        #assert False, self.args.requirements
+
         commands = [
             'wpm installframework %s' % self.public_dir,
             'rm %s' % os.path.join(self.public_dir, 'wp-config.php'),
             'rm -rf %s' % os.path.join(self.public_dir, 'wp-content', 'uploads'),
             'rm -rf %s' % os.path.join(self.public_dir, 'wp-content', 'themes', 'theme'),
-            'wpm installplugin -r deploy/requirements.wpm -l %s' % os.path.join(self.public_dir, 'wp-content', 'plugins'),
+            'wpm installplugin -r %s -l %s' % (self.args.requirements, os.path.join(self.public_dir, 'wp-content', 'plugins')),
         ]
 
         for c in commands:
@@ -215,37 +216,6 @@ class Install(object):
         """
         env = distutils.sysconfig.get_config_var("prefix")
         os.system('sudo chmod 775 %s' % os.path.join(env, 'bin', 'wpm'))
-
-    """
-    Finds all less files, and compiles them into css files
-    """
-    def compile_less(self):
-        print "Compiling less."
-
-        # os.system('npm install -g less')
-
-        for root, directories, filenames in os.walk('./app/theme'):
-
-            for f in filenames:
-                if fnmatch.fnmatch(f, '*.less'):
-                    self.mkcss(os.path.join(root, f))
-
-    """
-    Compiles a particular less file into a css file
-    """
-    def mkcss(self, src, output=None):
-
-        if output is None:
-            output = src.rstrip('less') + 'css'
-
-        cmd_string = [
-            'lessc -x -s',
-            src,
-            '>',
-            output,
-        ]
-
-        os.system(' '.join(cmd_string))
 
 
     """
