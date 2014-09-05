@@ -11,14 +11,6 @@ from bs4 import BeautifulSoup as bs
 class Install(object):
 
     @property
-    def assets_dir(self):
-        if 'hzdesign.com' in socket.gethostname():
-            return '/var/www/assets/%s/' % self.args.domain
-        else:
-            return os.path.abspath(
-                os.path.join(os.path.dirname(__file__), '..', 'site_assets'))
-
-    @property
     def project_path(self):
         return os.path.abspath(self.args.projectpath)
 
@@ -69,6 +61,9 @@ class Install(object):
         parser.add_argument("-r", "--requirements",
                             help="The path to requirements.wpm",
                             default='./requirements.wpm')
+        parser.add_argument("-u", "--uploads",
+                            help="The path to the wordpress uploads dir.",
+                            default='../uploads')
 
         self.args = parser.parse_args()
         self.install()
@@ -150,7 +145,7 @@ class Install(object):
                 os.path.join(self.public_dir, 'wp-content', 'themes', 'theme'),
             ),
             (
-                os.path.join(self.assets_dir, 'uploads'),
+                self.args.uploads,
                 os.path.join(self.public_dir, 'wp-content', 'uploads'),
             )
         ]
@@ -193,10 +188,8 @@ class Install(object):
 
         print "Creating uploads directory."
 
-        uploads_dir = os.path.join(self.assets_dir, 'uploads')
-
         try:
-            os.makedirs(uploads_dir)
+            os.makedirs(self.args.uploads)
         except:
             pass
 
@@ -214,7 +207,7 @@ class Install(object):
             'app/wp-config.php',
             'app/plugins',
             os.path.join(self.public_dir, 'wp-content'),
-            os.path.join(self.assets_dir, 'uploads'),
+            self.args.uploads,
             os.path.join(self.public_dir, '.htaccess'),
         ]
 
