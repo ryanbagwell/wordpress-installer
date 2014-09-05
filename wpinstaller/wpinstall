@@ -1,6 +1,12 @@
 #!/usr/bin/env python
-import os, sys, argparse, fnmatch, socket, shutil, requests, distutils
+import os
+import argparse
+import socket
+import shutil
+import requests
+import distutils
 from bs4 import BeautifulSoup as bs
+
 
 class Install(object):
 
@@ -11,6 +17,7 @@ class Install(object):
         else:
             return os.path.abspath(
                 os.path.join(os.path.dirname(__file__), '..', 'site_assets'))
+
     @property
     def project_path(self):
         return os.path.abspath(self.args.projectpath)
@@ -36,31 +43,32 @@ class Install(object):
     def __init__(self, *args, **kwargs):
         parser = argparse.ArgumentParser()
         parser.add_argument("-d", "--domain",
-            help="The deployment domain name", default=None)
+                            help="The deployment domain name", default=None)
         parser.add_argument("--virtualenvs",
-            help="Virtualenvs path", default=False)
+                            help="Virtualenvs path", default=False)
         parser.add_argument("--publicpath",
-            help="path to public", default='../public')
+                            help="path to public", default='../public')
         parser.add_argument("--user",
-            help="WordPress login user name", default='admin')
+                            help="WordPress login user name", default='admin')
         parser.add_argument("--password",
-            help="WordPress login password", default=None)
+                            help="WordPress login password", default=None)
         parser.add_argument("--flushpermalinks",
-            help="Flush permalinks", action="store_true")
+                            help="Flush permalinks", action="store_true")
         parser.add_argument("--flushw3tc",
-            help="Flush the w3 totalcache minify cache",  action="store_true")
+                            help="Flush the w3 totalcache minify cache",
+                            action="store_true")
         parser.add_argument("--settheme",
-            help="Set the theme to the themes/theme directory",
-                action="store_true")
+                            help="Set the theme to the themes/theme directory",
+                            action="store_true")
         parser.add_argument("--projectpath",
-            help="The location of the root of your project",
-                default="./app")
+                            help="The location of the root of your project",
+                            default="./app")
         parser.add_argument("--symlinkbase",
-            help="The base dir for project symlinks",
-                default=None)
+                            help="The base dir for project symlinks",
+                            default=None)
         parser.add_argument("-r", "--requirements",
-            help="The path to requirements.wpm",
-                default='./requirements.wpm')
+                            help="The path to requirements.wpm",
+                            default='./requirements.wpm')
 
         self.args = parser.parse_args()
         self.install()
@@ -86,14 +94,19 @@ class Install(object):
     """
     Executes various commands and handles the install
     """
+
     def install(self, *args, **kwargs):
 
         commands = [
             'wpm installframework %s' % self.public_dir,
             'rm %s' % os.path.join(self.public_dir, 'wp-config.php'),
-            'rm -rf %s' % os.path.join(self.public_dir, 'wp-content', 'uploads'),
-            'rm -rf %s' % os.path.join(self.public_dir, 'wp-content', 'themes', 'theme'),
-            'wpm installplugin -r %s -l %s' % (self.args.requirements, os.path.join(self.public_dir, 'wp-content', 'plugins')),
+            'rm -rf %s' % os.path.join(self.public_dir,
+                                       'wp-content', 'uploads'),
+            'rm -rf %s' % os.path.join(self.public_dir,
+                                       'wp-content', 'themes', 'theme'),
+            'wpm installplugin -r %s -l %s' % (
+                self.args.requirements,
+                os.path.join(self.public_dir, 'wp-content', 'plugins')),
         ]
 
         for c in commands:
@@ -102,6 +115,7 @@ class Install(object):
     """
     Creates the virtualenv and nodeenv, if paths to either are specified
     """
+
     def create_envs(self):
 
         if self.args.virtualenvs:
@@ -115,11 +129,12 @@ class Install(object):
     """
     Creates necessary symlinks
     """
+
     def create_symlinks(self):
 
         print "Creating symlinks."
 
-        if  self.args.symlinkbase:
+        if self.args.symlinkbase:
             project_path = self.args.symlinkbase
         else:
             project_path = self.project_path
@@ -127,16 +142,16 @@ class Install(object):
         links = [
             (
                 os.path.join(self.project_path, 'wp-config.php'),
-                os.path.join(self.public_dir,'wp-config.php')
+                os.path.join(self.public_dir, 'wp-config.php')
             ),
 
             (
                 os.path.join(self.project_path, 'theme'),
-                os.path.join(self.public_dir,'wp-content', 'themes', 'theme'),
+                os.path.join(self.public_dir, 'wp-content', 'themes', 'theme'),
             ),
             (
                 os.path.join(self.assets_dir, 'uploads'),
-                os.path.join(self.public_dir,'wp-content', 'uploads'),
+                os.path.join(self.public_dir, 'wp-content', 'uploads'),
             )
         ]
 
@@ -146,7 +161,7 @@ class Install(object):
                 self.project_path, 'plugins', name)
 
             wp_plugin_path = os.path.join(
-                self.public_dir,'wp-content', 'plugins', name)
+                self.public_dir, 'wp-content', 'plugins', name)
 
             """
             Remove the directory in wp-content/plugins if a
@@ -173,6 +188,7 @@ class Install(object):
     Creates a directory for static media files
     if it doesn't already exist
     """
+
     def create_uploads_directory(self):
 
         print "Creating uploads directory."
@@ -187,6 +203,7 @@ class Install(object):
     """
     Sets file permissions
     """
+
     def set_permissions(self):
         print "Setting permissions."
 
@@ -205,7 +222,8 @@ class Install(object):
             os.system('sudo chgrp -R %s %s' % (self.application_group, path))
             os.system('sudo chmod -R 2775 %s' % path)
 
-        os.system('sudo chgrp %s %s' % (self.application_group, self.public_dir))
+        os.system('sudo chgrp %s %s' %
+                  (self.application_group, self.public_dir))
         os.system('sudo chmod 775 %s' % self.public_dir)
 
         """
@@ -214,13 +232,14 @@ class Install(object):
         env = distutils.sysconfig.get_config_var("prefix")
         os.system('sudo chmod 775 %s' % os.path.join(env, 'bin', 'wpm'))
 
-
     """
     Flushes permalinks
     """
+
     def flush_permalinks(self):
 
-        if not self.args.flushpermalinks: return
+        if not self.args.flushpermalinks:
+            return
 
         print "Flushing permalinks"
 
@@ -231,27 +250,28 @@ class Install(object):
         permalinks = session.get(url)
 
         if permalinks.status_code is not 200:
-            message = "Couldn't connect to %s: %s" % (url, permalinks.status_code)
+            message = "Couldn't connect to %s: %s" % (
+                url, permalinks.status_code)
             raise Exception(message)
 
         soup = bs(permalinks.text)
 
         params = {
-           '_wp_nonce': soup.find(
+            '_wp_nonce': soup.find(
                 'input', attrs={
-                    'name':'_wpnonce'}).attrs['value'],
+                    'name': '_wpnonce'}).attrs['value'],
             '_wp_http_referer': soup.find(
                 'input', attrs={
-                    'name':'_wp_http_referer'}).attrs['value'],
+                    'name': '_wp_http_referer'}).attrs['value'],
             'selection': soup.find(attrs={
                 'name': "selection",
                 'checked': "checked"}).attrs['value'],
             'permalink_structure': soup.find(attrs={
                 'name': "permalink_structure"}).attrs['value'],
             'category_base': soup.find(attrs={
-                'name':"category_base"}).attrs['value'],
+                'name': "category_base"}).attrs['value'],
             'tag_base': soup.find(attrs={
-                'name':"tag_base"}).attrs['value'],
+                'name': "tag_base"}).attrs['value'],
         }
 
         permalinks = session.post(
@@ -260,9 +280,11 @@ class Install(object):
     """
     Flushes the w3tc minify cache
     """
+
     def flush_w3tc(self):
 
-        if not self.args.flushw3tc: return
+        if not self.args.flushw3tc:
+            return
 
         print "Flushing w3tc minify cache"
 
@@ -281,16 +303,18 @@ class Install(object):
             'w3tc_flush_minify': 'empty cache',
         }
 
-        flushed = session.post(
+        session.post(
             "http://%s/wp-admin/admin.php?page=w3tc_minify" %
-                self.args.domain, params)
+            self.args.domain, params)
 
     """
     Sets the theme to the themes/theme directory
     """
+
     def set_theme(self):
 
-        if not self.args.settheme: return
+        if not self.args.settheme:
+            return
 
         print "Setting theme"
 
@@ -322,6 +346,7 @@ class Install(object):
     """
     Gets an authorized session object for backend api calls
     """
+
     def _get_session(self):
 
         if hasattr(self, 'session'):
@@ -336,13 +361,14 @@ class Install(object):
         r = self.session.get(url)
 
         if r.status_code is not 200:
-            message = "Authorization error\nCouldn't connect to %s: %s" % (url, r.status_code)
+            message = "Authorization error\nCouldn't connect to %s: %s" % (
+                url, r.status_code)
             raise Exception(message)
 
         self.session.post(url, {
-                'log': self.args.user,
-                'pwd': self.args.password,
-            })
+            'log': self.args.user,
+            'pwd': self.args.password,
+        })
 
         print "Authorized"
 

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 from distutils.core import setup
-from distutils.command.install_data import install_data
 
 setup(name='wordpress-installer',
       version='0.0.1',
@@ -10,7 +9,7 @@ setup(name='wordpress-installer',
       author_email='ryan@ryanbagwell.com',
       url='https://github.com/ryanbagwell',
       py_modules=['wpinstaller'],
-      scripts=['wpinstaller/wpinstaller'],
+      scripts=['wpinstaller/wpinstall'],
       classifiers=[
         'Development Status :: 3 - Alpha',
         'Environment :: Console',
