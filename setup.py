@@ -21,5 +21,8 @@ setup(name='wordpress-installer',
         'License :: OSI Approved :: Python Software Foundation License',
         'Operating System :: MacOS :: MacOS X',
         'Operating System :: Microsoft :: Windows',
+      ],
+      install_requires=[
+        'wordpress-package-manager==0.9.2'
       ]
     )
