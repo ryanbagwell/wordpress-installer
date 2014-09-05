@@ -10,7 +10,7 @@ setup(name='wordpress-installer',
       author_email='ryan@ryanbagwell.com',
       url='https://github.com/ryanbagwell',
       py_modules=['wpinstaller'],
-      scripts=['wordpresspm/wpinstaller'],
+      scripts=['wpinstaller/wpinstaller'],
       classifiers=[
         'Development Status :: 3 - Alpha',
         'Environment :: Console',
