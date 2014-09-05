@@ -1,0 +1,385 @@
+#!/usr/bin/env python
+import os, sys, argparse, fnmatch, socket, shutil, requests, distutils
+from bs4 import BeautifulSoup as bs
+
+class Install(object):
+
+    @property
+    def assets_dir(self):
+        if 'hzdesign.com' in socket.gethostname():
+            return '/var/www/assets/%s/' % self.args.domain
+        else:
+            return os.path.abspath(
+                os.path.join(os.path.dirname(__file__), '..', 'site_assets'))
+    @property
+    def project_path(self):
+        return os.path.abspath(self.args.projectpath)
+
+    @property
+    def public_dir(self):
+        return os.path.abspath(self.args.publicpath)
+
+    @property
+    def virtualenv(self):
+        return os.path.join(self.args.virtualenvs, self.args.domain)
+
+    @property
+    def nodeenv(self):
+        return os.path.join(self.args.nodeenvs, self.args.domain)
+
+    @property
+    def application_group(self):
+        if 'hzdesign.com' in socket.gethostname():
+            return 'apache'
+        return '_www'
+
+    def __init__(self, *args, **kwargs):
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-d", "--domain",
+            help="The deployment domain name", default=None)
+        parser.add_argument("--virtualenvs",
+            help="Virtualenvs path", default=False)
+        parser.add_argument("--nodeenvs",
+            help="Nodeenvs path", default=False)
+        parser.add_argument("--publicpath",
+            help="path to public", default='../public')
+        parser.add_argument("--user",
+            help="WordPress login user name", default='admin')
+        parser.add_argument("--password",
+            help="WordPress login password", default=None)
+        parser.add_argument("--compileless",
+            help="Compile less files to css", action="store_true")
+        parser.add_argument("--flushpermalinks",
+            help="Flush permalinks", action="store_true")
+        parser.add_argument("--flushw3tc",
+            help="Flush the w3 totalcache minify cache",  action="store_true")
+        parser.add_argument("--settheme",
+            help="Set the theme to the themes/theme directory",
+                action="store_true")
+        parser.add_argument("--projectpath",
+            help="The location of the root of your project",
+                default="./app")
+        parser.add_argument("--symlinkbase",
+            help="The base dir for project symlinks",
+                default=None)
+
+        self.args = parser.parse_args()
+        self.build()
+        self.create_uploads_directory()
+        self.create_symlinks()
+        self.compile_less()
+        self.set_permissions()
+
+        try:
+            self.set_theme()
+        except Exception as instance:
+            print "Error while trying set the wordpress theme\n%s" % instance
+
+        try:
+            self.flush_permalinks()
+        except Exception as instance:
+            print "Error while trying to flush permalinks\n%s" % instance
+
+        try:
+            self.flush_w3tc()
+        except Exception as instance:
+            print "Error while trying to flush the w3tc minify cache\n%s" % instance
+
+    """
+    Executes various commands and handles the install
+    """
+    def build(self, *args, **kwargs):
+
+        commands = [
+            'wpm installframework %s' % self.public_dir,
+            'rm %s' % os.path.join(self.public_dir, 'wp-config.php'),
+            'rm -rf %s' % os.path.join(self.public_dir, 'wp-content', 'uploads'),
+            'rm -rf %s' % os.path.join(self.public_dir, 'wp-content', 'themes', 'theme'),
+            'wpm installplugin -r deploy/requirements.wpm -l %s' % os.path.join(self.public_dir, 'wp-content', 'plugins'),
+        ]
+
+        for c in commands:
+            os.system(c)
+
+    """
+    Creates the virtualenv and nodeenv, if paths to either are specified
+    """
+    def create_envs(self):
+
+        if self.args.virtualenvs:
+            if not os.path.exists(self.virtualenv):
+                os.system('virtualenv %s' % self.virtualenv)
+
+        if self.args.nodeenvs:
+            if not os.path.exists(self.nodeenv):
+                os.system('nodeenv %s' % self.nodeenv)
+
+    """
+    Creates necessary symlinks
+    """
+    def create_symlinks(self):
+
+        print "Creating symlinks."
+
+        if  self.args.symlinkbase:
+            project_path = self.args.symlinkbase
+        else:
+            project_path = self.project_path
+
+        links = [
+            (
+                os.path.join(self.project_path, 'wp-config.php'),
+                os.path.join(self.public_dir,'wp-config.php')
+            ),
+
+            (
+                os.path.join(self.project_path, 'theme'),
+                os.path.join(self.public_dir,'wp-content', 'themes', 'theme'),
+            ),
+            (
+                os.path.join(self.assets_dir, 'uploads'),
+                os.path.join(self.public_dir,'wp-content', 'uploads'),
+            )
+        ]
+
+        for name in os.listdir(os.path.join(self.project_path, 'plugins')):
+
+            app_plugin_path = os.path.join(
+                self.project_path, 'plugins', name)
+
+            wp_plugin_path = os.path.join(
+                self.public_dir,'wp-content', 'plugins', name)
+
+            """
+            Remove the directory in wp-content/plugins if a
+            plugin by the same name exists in the wordpress directory
+            """
+            if os.path.exists(wp_plugin_path):
+                if not os.path.islink(wp_plugin_path):
+                    shutil.rmtree(wp_plugin_path, ignore_errors=True)
+
+            links.append((app_plugin_path, wp_plugin_path))
+
+        for link in links:
+            print "Creating link to %s at %s" % (link[0], link[1])
+
+            if os.path.islink(link[1]):
+                os.unlink(link[1])
+
+            os.symlink(
+                os.path.relpath(
+                    link[0], os.path.join(link[1], '..')).replace(
+                        '_build', 'current'), link[1])
+
+    """
+    Creates a directory for static media files
+    if it doesn't already exist
+    """
+    def create_uploads_directory(self):
+
+        print "Creating uploads directory."
+
+        uploads_dir = os.path.join(self.assets_dir, 'uploads')
+
+        try:
+            os.makedirs(uploads_dir)
+        except:
+            pass
+
+    """
+    Sets file permissions
+    """
+    def set_permissions(self):
+        print "Setting permissions."
+
+        if not os.path.exists(os.path.join(self.public_dir, '.htaccess')):
+            os.system('touch %s' % os.path.join(self.public_dir, '.htaccess'))
+
+        paths = [
+            'app/wp-config.php',
+            'app/plugins',
+            os.path.join(self.public_dir, 'wp-content'),
+            os.path.join(self.assets_dir, 'uploads'),
+            os.path.join(self.public_dir, '.htaccess'),
+        ]
+
+        for path in paths:
+            os.system('sudo chgrp -R %s %s' % (self.application_group, path))
+            os.system('sudo chmod -R 2775 %s' % path)
+
+        os.system('sudo chgrp %s %s' % (self.application_group, self.public_dir))
+        os.system('sudo chmod 775 %s' % self.public_dir)
+
+        """
+        Set the permission to 775 for the wpm executable
+        """
+        env = distutils.sysconfig.get_config_var("prefix")
+        os.system('sudo chmod 775 %s' % os.path.join(env, 'bin', 'wpm'))
+
+    """
+    Finds all less files, and compiles them into css files
+    """
+    def compile_less(self):
+        print "Compiling less."
+
+        # os.system('npm install -g less')
+
+        for root, directories, filenames in os.walk('./app/theme'):
+
+            for f in filenames:
+                if fnmatch.fnmatch(f, '*.less'):
+                    self.mkcss(os.path.join(root, f))
+
+    """
+    Compiles a particular less file into a css file
+    """
+    def mkcss(self, src, output=None):
+
+        if output is None:
+            output = src.rstrip('less') + 'css'
+
+        cmd_string = [
+            'lessc -x -s',
+            src,
+            '>',
+            output,
+        ]
+
+        os.system(' '.join(cmd_string))
+
+
+    """
+    Flushes permalinks
+    """
+    def flush_permalinks(self):
+
+        if not self.args.flushpermalinks: return
+
+        print "Flushing permalinks"
+
+        session = self._get_session()
+
+        url = "http://%s/wp-admin/options-permalink.php" % self.args.domain
+
+        permalinks = session.get(url)
+
+        if permalinks.status_code is not 200:
+            message = "Couldn't connect to %s: %s" % (url, permalinks.status_code)
+            raise Exception(message)
+
+        soup = bs(permalinks.text)
+
+        params = {
+           '_wp_nonce': soup.find(
+                'input', attrs={
+                    'name':'_wpnonce'}).attrs['value'],
+            '_wp_http_referer': soup.find(
+                'input', attrs={
+                    'name':'_wp_http_referer'}).attrs['value'],
+            'selection': soup.find(attrs={
+                'name': "selection",
+                'checked': "checked"}).attrs['value'],
+            'permalink_structure': soup.find(attrs={
+                'name': "permalink_structure"}).attrs['value'],
+            'category_base': soup.find(attrs={
+                'name':"category_base"}).attrs['value'],
+            'tag_base': soup.find(attrs={
+                'name':"tag_base"}).attrs['value'],
+        }
+
+        permalinks = session.post(
+            "http://%s/wp-admin/options-permalink.php" % self.args.domain, params)
+
+    """
+    Flushes the w3tc minify cache
+    """
+    def flush_w3tc(self):
+
+        if not self.args.flushw3tc: return
+
+        print "Flushing w3tc minify cache"
+
+        session = self._get_session()
+
+        minify = session.get(
+            "http://%s/wp-admin/admin.php?page=w3tc_minify" % self.args.domain)
+
+        soup = bs(minify.text)
+
+        params = {
+            '_wpnonce': soup.find(attrs={
+                'name': '_wpnonce'}).attrs['value'],
+            '_wp_http_referer': soup.find(attrs={
+                'name': '_wp_http_referer'}).attrs['value'],
+            'w3tc_flush_minify': 'empty cache',
+        }
+
+        flushed = session.post(
+            "http://%s/wp-admin/admin.php?page=w3tc_minify" %
+                self.args.domain, params)
+
+    """
+    Sets the theme to the themes/theme directory
+    """
+    def set_theme(self):
+
+        if not self.args.settheme: return
+
+        print "Setting theme"
+
+        session = self._get_session()
+
+        url = "http://%s/wp-admin/themes.php" % self.args.domain
+
+        theme = session.get(url)
+
+        if theme.status_code is not 200:
+            message = "Couldn't connect to %s: %s" % (url, theme.status_code)
+            raise Exception(message)
+
+        soup = bs(theme.text)
+
+        params = {
+            'action': 'activate',
+            'template': 'theme',
+            'stylesheet': 'theme',
+            '_wpnonce': soup.find(attrs={
+                'name': '_ajax_fetch_list_nonce'}).attrs['value'],
+        }
+
+        session.get(
+            "http://%s/wp-admin/themes.php" % self.args.domain, params=params)
+
+        print "Successfully set theme"
+
+    """
+    Gets an authorized session object for backend api calls
+    """
+    def _get_session(self):
+
+        if hasattr(self, 'session'):
+            return self.session
+
+        print "Logging into WP backend"
+
+        self.session = requests.session()
+
+        url = "http://%s/wp-login.php" % self.args.domain
+
+        r = self.session.get(url)
+
+        if r.status_code is not 200:
+            message = "Authorization error\nCouldn't connect to %s: %s" % (url, r.status_code)
+            raise Exception(message)
+
+        self.session.post(url, {
+                'log': self.args.user,
+                'pwd': self.args.password,
+            })
+
+        print "Authorized"
+
+        return self.session
+
+if __name__ == "__main__":
+    installation = Install()
