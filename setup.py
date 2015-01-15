@@ -24,5 +24,6 @@ setup(name='wordpress-installer',
       install_requires=[
         'wordpress-package-manager==0.9.2',
         'beautifulsoup4==4.1.3',
+        'requests==0.14.2',
       ]
     )
