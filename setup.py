@@ -22,6 +22,7 @@ setup(name='wordpress-installer',
         'Operating System :: Microsoft :: Windows',
       ],
       install_requires=[
-        'wordpress-package-manager==0.9.2'
+        'wordpress-package-manager==0.9.2',
+        'beautifulsoup4==4.1.3',
       ]
     )
