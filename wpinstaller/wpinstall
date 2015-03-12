@@ -35,7 +35,9 @@ class Install(object):
     def __init__(self, *args, **kwargs):
         parser = argparse.ArgumentParser()
         parser.add_argument("-d", "--domain",
-                            help="The deployment domain name", default=None)
+                            help="The deployment domain name (i.e. www.example.com).", default=None)
+        parser.add_argument("-a", "--admindomain",
+                            help="The domain that serves /wp-admin", default=None)
         parser.add_argument("--virtualenvs",
                             help="Virtualenvs path", default=False)
         parser.add_argument("--publicpath",
@@ -44,6 +46,9 @@ class Install(object):
                             help="WordPress login user name", default='admin')
         parser.add_argument("--password",
                             help="WordPress login password", default=None)
+        parser.add_argument("--basicauth",
+                            help="""The username and password combination for
+                                    basic auth in the form of username:password""", default=None)
         parser.add_argument("--flushpermalinks",
                             help="Flush permalinks", action="store_true")
         parser.add_argument("--flushw3tc",
@@ -200,11 +205,9 @@ class Install(object):
         except:
             pass
 
-    """
-    Sets file permissions
-    """
-
     def set_permissions(self):
+        """ Sets file permissions """
+
         print "Setting permissions."
 
         if not os.path.exists(os.path.join(self.public_dir, '.htaccess')):
@@ -232,11 +235,8 @@ class Install(object):
         env = distutils.sysconfig.get_config_var("prefix")
         os.system('sudo chmod 775 %s' % os.path.join(env, 'bin', 'wpm'))
 
-    """
-    Flushes permalinks
-    """
-
     def flush_permalinks(self):
+        """ Flushes permalinks """
 
         if not self.args.flushpermalinks:
             return
@@ -245,7 +245,7 @@ class Install(object):
 
         session = self._get_session()
 
-        url = "http://%s/wp-admin/options-permalink.php" % self.args.domain
+        url = "http://%s/wp-admin/options-permalink.php" % self._get_admin_domain()
 
         permalinks = session.get(url)
 
@@ -275,13 +275,10 @@ class Install(object):
         }
 
         permalinks = session.post(
-            "http://%s/wp-admin/options-permalink.php" % self.args.domain, params)
-
-    """
-    Flushes the w3tc minify cache
-    """
+            "http://%s/wp-admin/options-permalink.php" % self._get_admin_domain(), params)
 
     def flush_w3tc(self):
+        """ Flushes the w3tc minify cache """
 
         if not self.args.flushw3tc:
             return
@@ -290,10 +287,10 @@ class Install(object):
 
         session = self._get_session()
 
-        minify = session.get(
-            "http://%s/wp-admin/admin.php?page=w3tc_minify" % self.args.domain)
+        response = session.get(
+            "http://%s/wp-admin/admin.php?page=w3tc_minify" % self._get_admin_domain())
 
-        soup = bs(minify.text)
+        soup = bs(response.text)
 
         params = {
             '_wpnonce': soup.find(attrs={
@@ -304,14 +301,10 @@ class Install(object):
         }
 
         session.post(
-            "http://%s/wp-admin/admin.php?page=w3tc_minify" %
-            self.args.domain, params)
-
-    """
-    Sets the theme to the themes/theme directory
-    """
+            "http://%s/wp-admin/admin.php?page=w3tc_minify" % self._get_admin_domain(), params)
 
     def set_theme(self):
+        """ Sets the theme to the themes/theme directory """
 
         if not self.args.settheme:
             return
@@ -320,7 +313,7 @@ class Install(object):
 
         session = self._get_session()
 
-        url = "http://%s/wp-admin/themes.php" % self.args.domain
+        url = "http://%s/wp-admin/themes.php" % self._get_admin_domain()
 
         theme = session.get(url)
 
@@ -339,40 +332,58 @@ class Install(object):
         }
 
         session.get(
-            "http://%s/wp-admin/themes.php" % self.args.domain, params=params)
+            "http://%s/wp-admin/themes.php" % self._get_admin_domain(), params=params)
 
         print "Successfully set theme"
 
-    """
-    Gets an authorized session object for backend api calls
-    """
-
     def _get_session(self):
+        """ Gets an authorized session object for backend api calls """
 
         if hasattr(self, 'session'):
             return self.session
 
         print "Logging into WP backend"
 
-        self.session = requests.session()
+        self.session = requests.Session()
+        self.session.auth = self._get_basicauth_for_request()
 
-        url = "http://%s/wp-login.php" % self.args.domain
+        url = "http://%s/wp-login.php" % self._get_admin_domain()
 
-        r = self.session.get(url)
+        r = self.session.get(url, allow_redirects=True)
 
         if r.status_code is not 200:
             message = "Authorization error\nCouldn't connect to %s: %s" % (
                 url, r.status_code)
             raise Exception(message)
 
-        self.session.post(url, {
+        response = self.session.post(url, {
             'log': self.args.user,
             'pwd': self.args.password,
         })
 
-        print "Authorized"
+        bad_pw_message = "The password you entered for the username <strong>%s</strong> is incorrect" % self.args.user
+
+        if response.text.find(bad_pw_message) > -1:
+            print "Invalid wordpress login."
+        else:
+            print "Authorized"
 
         return self.session
+
+    def _get_admin_domain(self):
+
+        return self.args.admindomain if self.args.admindomain else self.args.domain
+
+    def _get_basicauth_for_request(self):
+
+        if self.args.basicauth:
+
+            parts = self.args.basicauth.split(':')
+
+            try:
+                return (parts[0], parts[1],)
+            except:
+                return self.args.basicauth
 
 if __name__ == "__main__":
     installation = Install()
