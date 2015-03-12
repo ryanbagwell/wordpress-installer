@@ -94,11 +94,6 @@ class Install(object):
 
         commands = [
             'wpm installframework %s' % self.public_dir,
-            'rm %s' % os.path.join(self.public_dir, 'wp-config.php'),
-            'rm -rf %s' % os.path.join(self.public_dir,
-                                       'wp-content', 'uploads'),
-            'rm -rf %s' % os.path.join(self.public_dir,
-                                       'wp-content', 'themes', 'theme'),
             'wpm installplugin -r %s -l %s' % (
                 self.args.requirements,
                 os.path.join(self.public_dir, 'wp-content', 'plugins')),
@@ -121,13 +116,10 @@ class Install(object):
             if not os.path.exists(self.nodeenv):
                 os.system('nodeenv %s' % self.nodeenv)
 
-    """
-    Creates necessary symlinks
-    """
-
     def create_symlinks(self):
+        """ Creates necessary symlinks """
 
-        print "Creating symlinks."
+        print "Creating symlinks..."
 
         if self.args.symlinkbase:
             project_path = self.args.symlinkbase
@@ -135,26 +127,32 @@ class Install(object):
             project_path = self.project_path
 
         links = [
-            (
-                os.path.join(self.project_path, 'wp-config.php'),
-                os.path.join(self.public_dir, 'wp-config.php')
-            ),
-
-            (
-                os.path.join(self.project_path, 'theme'),
-                os.path.join(self.public_dir, 'wp-content', 'themes', 'theme'),
-            ),
-            (
-                self.args.uploads,
-                os.path.join(self.public_dir, 'wp-content', 'uploads'),
-            )
+            {
+                'source': os.path.join(self.project_path, 'wp-config.php'),
+                'target': os.path.join(self.public_dir, 'wp-config.php'),
+            },
+            {
+                'source': os.path.join(self.project_path, 'theme'),
+                'target': os.path.join(self.public_dir, 'wp-content', 'themes', 'theme'),
+            },
+            {
+                'source': self.args.uploads,
+                'target': os.path.join(self.public_dir, 'wp-content', 'uploads'),
+            }
         ]
+
+        """ Loop over the plugins directory
+            in our project to create a list of symlinks to build """
 
         for name in os.listdir(os.path.join(self.project_path, 'plugins')):
 
-            app_plugin_path = os.path.join(
+            """ Compile the path to the plugin
+                dir contained in our project """
+            project_plugin_path = os.path.join(
                 self.project_path, 'plugins', name)
 
+            """ Compile the target location in the wordpress
+                plugins dir """
             wp_plugin_path = os.path.join(
                 self.public_dir, 'wp-content', 'plugins', name)
 
@@ -166,27 +164,36 @@ class Install(object):
                 if not os.path.islink(wp_plugin_path):
                     shutil.rmtree(wp_plugin_path, ignore_errors=True)
 
-            links.append((app_plugin_path, wp_plugin_path))
+            links.append({
+                'source': project_plugin_path,
+                'target': wp_plugin_path,
+            })
 
         for link in links:
-            print "Creating link to %s at %s" % (link[0], link[1])
+            print "Creating link to %s at %s" % (link['source'], link['target'])
 
-            if os.path.islink(link[1]):
-                os.unlink(link[1])
+            """ If it's already symlinked, ignore it if
+                the source is the same. Otherwise, remove the link. """
+            if os.path.islink(link['target']):
+
+                print "Found existing symlink link at %s." % link['target']
+
+                if os.path.abspath(os.readlink(link['target'])) == link['source']:
+                    print "Symlink already points to source %s. Ignoring." % link['source']
+                    continue
+                else:
+                    os.unlink(link['target'])
 
             os.symlink(
                 os.path.relpath(
-                    link[0], os.path.join(link[1], '..')).replace(
-                        '_build', 'current'), link[1])
-
-    """
-    Creates a directory for static media files
-    if it doesn't already exist
-    """
+                    link['source'], os.path.join(link['target'], '..')).replace(
+                        '_build', 'current'), link['target'])
 
     def create_uploads_directory(self):
+        """ Creates a directory for static media files
+            if it doesn't already exist """
 
-        print "Creating uploads directory."
+        print "Creating uploads directory..."
 
         try:
             os.makedirs(self.args.uploads)
