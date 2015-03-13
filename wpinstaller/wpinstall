@@ -161,14 +161,6 @@ class Install(object):
             wp_plugin_path = os.path.join(
                 self.public_dir, 'wp-content', 'plugins', name)
 
-            """
-            Remove the directory in wp-content/plugins if a
-            plugin by the same name exists in the wordpress directory
-            """
-            if os.path.exists(wp_plugin_path):
-                if not os.path.islink(wp_plugin_path):
-                    shutil.rmtree(wp_plugin_path, ignore_errors=True)
-
             links.append({
                 'source': project_plugin_path,
                 'target': wp_plugin_path,
@@ -188,6 +180,14 @@ class Install(object):
                     continue
                 else:
                     os.unlink(link['target'])
+
+            """ If there's a file or dir present at the target
+                location, delete it first """
+            if os.path.exists(link['target']):
+                if os.path.isfile(link['target']):
+                    os.remove(link['target'])
+                else:
+                    shutil.rmtree(link['target'])
 
             os.symlink(
                 os.path.relpath(
